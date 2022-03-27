@@ -99,6 +99,8 @@ def apply_drag(win, drag_regions):
         wx, wy = win.winfo_x(), win.winfo_y()
         last_x, last_y = event.x+wx, event.y+wy
 
+        liftall()
+
     def drag_motion(event):
         nonlocal last_x, last_y
         
@@ -357,6 +359,12 @@ def update_windows():
         win.geometry(fmt())
         
     update_layout()
+
+def liftall():
+    for win, fmt, in windows:
+        win.lift()
+
+liftall()
 
 winBtn.mainloop()
 

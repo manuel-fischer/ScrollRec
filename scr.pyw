@@ -121,6 +121,7 @@ def apply_drag(win, drag_regions):
         update_windows()
         
     win.bind('<ButtonPress>', start_drag)
+    #win.bind('<Enter>', motion)
     win.bind('<Motion>', motion)
     win.bind('<B1-Motion>', drag_motion)
 
@@ -144,7 +145,7 @@ def make_border(master, fmt, drag_regions):
 
 def drag_move(dx, dy):
     global x, y, w, h
-    x += dx
+    if not recording: x += dx
     y += dy
 
 def drag_top(dx, dy):
@@ -158,11 +159,13 @@ def drag_bot(dx, dy):
 
 def drag_lft(dx, dy):
     global x, y, w, h
+    if recording: return
     x += dx
     w -= dx
 
 def drag_rgt(dx, dy):
     global x, y, w, h
+    if recording: return
     w += dx
 
 def drag_both(a, b):
@@ -359,6 +362,9 @@ def update_windows():
         win.geometry(fmt())
         
     update_layout()
+    
+    for win, fmt in windows:
+        win.update()
 
 def liftall():
     for win, fmt, in windows:

@@ -6,16 +6,21 @@
 
 import tkinter as tk
 from tkinter import ttk
+import string
 
-from PIL import Image, ImageGrab
+from PIL import Image, ImageGrab, ImageTk
 #ImageGrab.grab([rect]).show()
 import os
 
 REC_INTERVAL = 1
 
+SCALE = 1
+
 BSZ = 5 # bordersize
-BTN_W = 200 # button bar width
-BTN_H = 24 # button bar height
+BTN_W = int(150*SCALE) # button bar width
+BTN_H = int(24*SCALE) # button bar height
+BTN_S = int(32*SCALE) # button size, (width of single button)
+BTN_ICON_SIZE = int(16*SCALE)
 
 CRN = 18 # cornersize
 CRB = CRN-BSZ # cornersize minus bordersize
@@ -28,6 +33,9 @@ h = 300
 btn_w = w+2*BTN_W
 
 BORDER_COLOR = "#ffff00"
+IDLE_COLOR = "#000060"
+REC_COLOR = "#a00000"
+
 
 if os.name == 'nt':
     # stackoverflow.com/21319486
@@ -199,10 +207,49 @@ winBtn.attributes('-topmost', True)
 winBtn.attributes('-toolwindow', True)
 winBtn.attributes('-alpha', '0.9')
 winBtn.overrideredirect(1)
-winBtn["bg"] = "blue"
-apply_drag(winBtn, [([100, None, -BTN_H, None], drag_move, "size")])
+winBtn["bg"] = IDLE_COLOR
+apply_drag(winBtn, [([2*BTN_S, None, -BTN_H, None], drag_move, "size")])
+
+style = ttk.Style()
+style.theme_use("default")
+
+def darken_color(hexstr, i = 1):
+    darken_x = lambda c: string.hexdigits[max(0, int(c, 16)-i)] if c.lower() in string.hexdigits else c
+    return "".join(map(darken_x, hexstr))
+
+def lighten_color(hexstr, i = 1):
+    darken_x = lambda c: string.hexdigits[min(15, int(c, 16)+i)] if c.lower() in string.hexdigits else c
+    return "".join(map(darken_x, hexstr))
+
+def set_highlight_color(color):
+    winBtn["bg"] = color
+    style.configure("Window.TButton",
+                    foreground="#ffffff",
+                    background=color,
+                    relief="flat",
+                    borderwidth=0
+    )
+
+    style.map("Window.TButton",
+        foreground=[('pressed', "#ffffff"), ('active', "#ffffff")],
+        background=[('pressed', darken_color(color, 4)), ('active', lighten_color(color, 3))],
+    )
 
 
+
+img_storage = []
+
+def load_icon(name):
+    img = Image.open(f"icons/{name}.png").convert("RGBA")
+    img = img.resize((img.width*BTN_ICON_SIZE//img.height, BTN_ICON_SIZE))
+    pimg = ImageTk.PhotoImage(img)
+    #pimg = tk.PhotoImage(file=fn)
+    img_storage.append(pimg)
+    return pimg
+
+
+
+set_highlight_color(IDLE_COLOR)
 
 def do_prt():
     img = ImageGrab.grab([x, y, x+w, y+h])
@@ -210,8 +257,8 @@ def do_prt():
     clipboard_set_image(img)
 
 
-btnPrt = ttk.Button(winBtn, text="PRT", command=do_prt)
-btnPrt.place(x=0, y=0, h=BTN_H, w=50)
+btnPrt = ttk.Button(winBtn, image=load_icon("prt"), command=do_prt, style="Window.TButton")
+btnPrt.place(x=0, y=0, h=BTN_H, w=BTN_S)
 
 recording = False
 rec_img = None
@@ -282,7 +329,8 @@ def do_record_frame():
 def do_toggle_rec():
     global recording, rec_img
     recording = not recording
-    winBtn["bg"] = "red" if recording else "blue"
+    color = REC_COLOR if recording else IDLE_COLOR
+    set_highlight_color(color)
 
     if not recording:
         # copy to clipboard
@@ -291,8 +339,8 @@ def do_toggle_rec():
     rec_img = None
     keep_recording()
     
-btnRec = ttk.Button(winBtn, text="REC", command=do_toggle_rec)
-btnRec.place(x=50, y=0, h=BTN_H, w=50)
+btnRec = ttk.Button(winBtn, image=load_icon("rec"), command=do_toggle_rec, style="Window.TButton")
+btnRec.place(x=BTN_S, y=0, h=BTN_H, w=BTN_S)
 
 
 
@@ -306,8 +354,11 @@ def do_toggle_rect():
         else:
             win.withdraw()
 
-btnTRect = ttk.Button(winBtn, text="-", command=do_toggle_rect) # also closes border
-btnClose = ttk.Button(winBtn, text="X", command=winBtn.destroy) # also closes border
+
+
+
+btnTRect = ttk.Button(winBtn, image=load_icon("min"), command=do_toggle_rect, style="Window.TButton") # also closes border
+btnClose = ttk.Button(winBtn, image=load_icon("x"), command=winBtn.destroy, style="Window.TButton") # also closes border
 
 
 

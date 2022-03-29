@@ -1,0 +1,3 @@
+- hex-color code display
+- minimized display without buttons
+- save to directory

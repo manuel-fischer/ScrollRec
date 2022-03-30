@@ -14,7 +14,7 @@ import os
 
 REC_INTERVAL = 1
 
-SCALE = 2
+SCALE = 1
 
 BSZ = 5 # bordersize
 BTN_W = int(150*SCALE) # button bar width

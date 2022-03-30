@@ -2,7 +2,7 @@
 Create large screenshots by scrolling
 
 <center>
-<img src="screenshots/01.png" width="70%">
+<img src="screenshots/01.png">
 <p>
 <i>ScrollRec in action</i>
 </center>

@@ -14,7 +14,7 @@ import os
 
 REC_INTERVAL = 1
 
-SCALE = 1
+SCALE = 2
 
 BSZ = 5 # bordersize
 BTN_W = int(150*SCALE) # button bar width
@@ -29,6 +29,8 @@ x = 200
 y = 100
 w = 500
 h = 300
+
+of_x = of_y = 0
 
 btn_w = w+2*BTN_W
 
@@ -72,10 +74,11 @@ def check_greater(val, boundary, length):
 def apply_drag(win, drag_regions):
     last_x, last_y = 0, 0 # screen x / y
     cur_region = 0
+    dragging = False
 
-    def motion(event):
+    def update_region(x, y):
         nonlocal cur_region
-
+        if dragging: return
         win_w, win_h = win.winfo_width(), win.winfo_height()
 
         cur_region = None
@@ -83,11 +86,11 @@ def apply_drag(win, drag_regions):
         for i, (rect, drag_fn, cursor) in enumerate(drag_regions):
             l, t, r, b = rect
 
-            if check_smaller(event.x, l, win_w): continue
-            if check_greater(event.x, r, win_w): continue
+            if check_smaller(x, l, win_w): continue
+            if check_greater(x, r, win_w): continue
 
-            if check_smaller(event.y, t, win_h): continue
-            if check_greater(event.y, b, win_h): continue
+            if check_smaller(y, t, win_h): continue
+            if check_greater(y, b, win_h): continue
 
             cur_region = i
             break
@@ -98,14 +101,29 @@ def apply_drag(win, drag_regions):
             rect, drag_fn, cursor = drag_regions[cur_region]
             win["cursor"] = cursor
 
+    def motion(event):
+        update_region(event.x, event.y)
+
+    def enter(event):
+        update_region(event.x, event.y)
+    
     def start_drag(event):
-        nonlocal last_x, last_y, cur_region
+        nonlocal last_x, last_y, cur_region, dragging
+        global of_x, of_y
+
+        update_region(event.x, event.y)
         
         if cur_region is None: return
         if event.num != 1: return
+
+        if dragging: return
+
+        dragging = True
         
         wx, wy = win.winfo_x(), win.winfo_y()
         last_x, last_y = event.x+wx, event.y+wy
+
+        of_x = of_y = 0
 
         liftall()
 
@@ -124,12 +142,21 @@ def apply_drag(win, drag_regions):
 
         rect, drag_fn, cursor = drag_regions[cur_region]
         drag_fn(dx, dy)
+
+        assert w >= 1
+        assert h >= 1
         
         #last_x, last_y = event.x-dx, event.y-dy
         update_windows()
+
+    def stop_drag(event):
+        nonlocal dragging
+        if event.num != 1: return
+        dragging = False
         
     win.bind('<ButtonPress>', start_drag)
-    #win.bind('<Enter>', motion)
+    win.bind('<ButtonRelease>', stop_drag)
+    win.bind('<Enter>', enter)
     win.bind('<Motion>', motion)
     win.bind('<B1-Motion>', drag_motion)
 
@@ -152,29 +179,43 @@ def make_border(master, fmt, drag_regions):
 
 
 def drag_move(dx, dy):
-    global x, y, w, h
+    global x, y, w, h, of_x, of_y
     if not recording: x += dx
     y += dy
 
 def drag_top(dx, dy):
-    global x, y, w, h
-    y += dy
-    h -= dy
+    global x, y, w, h, of_x, of_y
+    #y += dy
+    #h -= dy
+    y += dy + of_y
+    h -= dy + of_y
+    if h < 1: of_y = -h+1; h += of_y; y -= of_y
+    else:     of_y = 0
     
 def drag_bot(dx, dy):
-    global x, y, w, h
-    h += dy
+    global x, y, w, h, of_x, of_y
+    #h += dy
+    h += dy - of_y
+    if h < 1: of_y = -h+1; h += of_y
+    else:     of_y = 0
 
 def drag_lft(dx, dy):
-    global x, y, w, h
+    global x, y, w, h, of_x, of_y
     if recording: return
-    x += dx
-    w -= dx
+    #x += dx
+    #w -= dx
+    x += dx + of_x
+    w -= dx + of_x
+    if w < 1: of_x = -w+1; w += of_x; x -= of_x
+    else:     of_x = 0
 
 def drag_rgt(dx, dy):
-    global x, y, w, h
+    global x, y, w, h, of_x, of_y
     if recording: return
-    w += dx
+    #w += dx
+    w += dx - of_x
+    if w < 1: of_x = -w+1; w += of_x
+    else:     of_x = 0
 
 def drag_both(a, b):
     def drag(dx, dy):
@@ -406,8 +447,10 @@ windows = [
 
 def update_windows():
     global x, y, w, h
-    if w < 1: w = 1
-    if h < 1: h = 1
+    #if w < 1: w = 1
+    #if h < 1: h = 1
+    assert w >= 1
+    assert h >= 1
     
     for win, fmt in windows:
         win.geometry(fmt())

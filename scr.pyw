@@ -1,23 +1,32 @@
+#!/usr/bin/python3
+
  #  #
 ######
  #  #    Scroll Record  --  by Manuel Fischer
 ######
  #  #
 
+import sys
 import tkinter as tk
 from tkinter import ttk
 import string
 
-from PIL import Image, ImageTk
+# LINUX: xclip should be installed!
+
+from PIL import Image
+from PIL import ImageTk # sudo apt-get install python3-pil python3-pil.imagetk
 
 
 #try:
 #from PIL import ImageGrab
 #grab_screenshot = ImageGrab.grab
 
-from scr_win import grab_screenshot
+IS_WIN = 'win32' in str(sys.platform).lower()
 
-
+if IS_WIN:
+    from scr_win import grab_screenshot, clipboard_set_image
+else:
+    from scr_linux import grab_screenshot, clipboard_set_image
 
 #ImageGrab.grab([rect]).show()
 import os
@@ -50,28 +59,6 @@ REC_COLORS = ["#a00000", "#ff2010"]
 
 rec_color = 0
 
-if os.name == 'nt':
-    # stackoverflow.com/21319486
-    # stackoverflow.com/34322132
-    # windows only
-    def clipboard_set_image(img):
-        import io
-        import win32clipboard as wclp
-
-        output = io.BytesIO()
-        img.convert('RGB').save(output, 'BMP')
-        data = output.getvalue()[14:] # skip bmp file header
-        output.close()
-        
-
-        wclp.OpenClipboard()
-        wclp.EmptyClipboard()
-        wclp.SetClipboardData(wclp.CF_DIB, data)
-        wclp.CloseClipboard()
-
-else:
-    def clipboard_set_image(img):
-        img.show()
 
 
 def check_smaller(val, boundary, length, on_none = False):
@@ -86,10 +73,14 @@ def apply_drag(win, drag_regions):
     last_x, last_y = 0, 0 # screen x / y
     cur_region = 0
     dragging = False
+    current_cursor = None
 
     def update_region(x, y):
-        nonlocal cur_region
-        if dragging: return
+        nonlocal cur_region, current_cursor
+        if dragging:
+            if current_cursor:
+                win["cursor"] = current_cursor[1]
+            return
         win_w, win_h = win.winfo_width(), win.winfo_height()
 
         cur_region = None
@@ -106,10 +97,14 @@ def apply_drag(win, drag_regions):
             cur_region = i
             break
 
+        current_cursor = None
         if cur_region is None:
             win["cursor"] = "arrow"
         else:
             rect, drag_fn, cursor = drag_regions[cur_region]
+            if isinstance(cursor, list):
+                current_cursor = cursor
+                cursor = cursor[0]
             win["cursor"] = cursor
 
     def motion(event):
@@ -130,6 +125,7 @@ def apply_drag(win, drag_regions):
         if dragging: return
 
         dragging = True
+        update_region(event.x, event.y)
         
         wx, wy = win.winfo_x(), win.winfo_y()
         last_x, last_y = event.x+wx, event.y+wy
@@ -164,6 +160,7 @@ def apply_drag(win, drag_regions):
         nonlocal dragging
         if event.num != 1: return
         dragging = False
+        update_region(event.x, event.y)
         
     win.bind('<ButtonPress>', start_drag)
     win.bind('<ButtonRelease>', stop_drag)
@@ -172,12 +169,15 @@ def apply_drag(win, drag_regions):
     win.bind('<B1-Motion>', drag_motion)
 
 def make_border(master, fmt, drag_regions):
-
     win = tk.Toplevel(master)
     win.geometry(fmt())
     win.attributes('-topmost', True)
-    win.attributes('-toolwindow', True)
-    win.attributes('-alpha', '0.6')
+    if IS_WIN:
+        win.attributes('-toolwindow', True)
+        win.attributes('-alpha', '0.6')
+    else:
+        win.wm_attributes('-alpha', '0.6')
+
     win.overrideredirect(1)
     win["bg"] = BORDER_COLOR
 
@@ -254,13 +254,53 @@ def winBtnFmt():
     return f"{ww}x{BTN_H}+{xx}+{yy}"
 
 
+# https://www.tcl.tk/man/tcl8.4/TkCmd/cursors.html
+if IS_WIN:
+    CUR_MOVE = "size"
+    CUR_MOVING = "size"
+
+    # Corners
+    CUR_SIZE_NW = "size_nw_se"
+    CUR_SIZE_SE = "size_nw_se"
+    CUR_SIZE_NE = "size_ne_sw"
+    CUR_SIZE_SW = "size_ne_sw"
+
+    # Borders
+    CUR_SIZE_S = "size_ns"
+    CUR_SIZE_S = "size_ns"
+    CUR_SIZE_W = "size_we"
+    CUR_SIZE_E = "size_we"
+else:
+    CUR_MOVE = "hand1" # DOWN: "fleur"
+    CUR_MOVING = "fleur"
+
+    # Corners
+    CUR_SIZE_NW = "top_left_corner"
+    CUR_SIZE_SE = "bottom_right_corner"
+    CUR_SIZE_NE = "top_right_corner"
+    CUR_SIZE_SW = "bottom_left_corner"
+
+    #CUR_SIZE_NW, CUR_SIZE_SE = CUR_SIZE_SE, CUR_SIZE_NW # fix offset
+    #CUR_SIZE_NE, CUR_SIZE_SW = CUR_SIZE_SW, CUR_SIZE_NE # fix offset
+
+    CUR_SIZE_N = "top_side"
+    CUR_SIZE_S = "bottom_side"
+    CUR_SIZE_W = "left_side"
+    CUR_SIZE_E = "right_side"
+
+
+
 winBtn.geometry(winBtnFmt())
 winBtn.attributes('-topmost', True)
-winBtn.attributes('-toolwindow', True)
-winBtn.attributes('-alpha', '0.9')
+if IS_WIN:
+    winBtn.attributes('-toolwindow', True)
+    winBtn.attributes('-alpha', '0.9')
+else:
+    winBtn.wm_attributes('-alpha', '0.9')
+
 winBtn.overrideredirect(1)
 winBtn["bg"] = IDLE_COLOR
-apply_drag(winBtn, [([2*BTN_S, None, -BTN_H, None], drag_move, "size")])
+apply_drag(winBtn, [([2*BTN_S, None, -BTN_H, None], drag_move, [CUR_MOVE, CUR_MOVING])])
 
 style = ttk.Style()
 style.theme_use("default")
@@ -436,26 +476,25 @@ def update_layout():
 
 update_layout()
 
-
 winTop = make_border(winBtn, lambda: f"{2*BSZ+w}x{BSZ}+{x-BSZ}+{y-BSZ}", [
-    ([None, None,  CRN, None], drag_both(drag_lft, drag_top), "size_nw_se"),
-    ([-CRN, None, None, None], drag_both(drag_rgt, drag_top), "size_ne_sw"),
-    ([None, None, None, None], drag_top, "size_ns")
+    ([None, None,  CRN, None], drag_both(drag_lft, drag_top), CUR_SIZE_NW),
+    ([-CRN, None, None, None], drag_both(drag_rgt, drag_top), CUR_SIZE_NE),
+    ([None, None, None, None], drag_top, CUR_SIZE_N)
 ])
 winBot = make_border(winBtn, lambda: f"{2*BSZ+w}x{BSZ}+{x-BSZ}+{y+h}", [
-    ([-CRN, None, None, None], drag_both(drag_rgt, drag_bot), "size_nw_se"),
-    ([None, None,  CRN, None], drag_both(drag_lft, drag_bot), "size_ne_sw"),
-    ([None, None, None, None], drag_bot, "size_ns")
+    ([-CRN, None, None, None], drag_both(drag_rgt, drag_bot), CUR_SIZE_SE),
+    ([None, None,  CRN, None], drag_both(drag_lft, drag_bot), CUR_SIZE_SW),
+    ([None, None, None, None], drag_bot, CUR_SIZE_S)
 ])
 winLft = make_border(winBtn, lambda: f"{BSZ}x{h}+{x-BSZ}+{y}", [
-    ([None, None, None,  CRB], drag_both(drag_lft, drag_top), "size_nw_se"),
-    ([None, -CRB, None, None], drag_both(drag_lft, drag_bot), "size_ne_sw"),
-    ([None, None, None, None], drag_lft, "size_we")
+    ([None, None, None,  CRB], drag_both(drag_lft, drag_top), CUR_SIZE_NW),
+    ([None, -CRB, None, None], drag_both(drag_lft, drag_bot), CUR_SIZE_SW),
+    ([None, None, None, None], drag_lft, CUR_SIZE_W)
 ])
 winRgt = make_border(winBtn, lambda: f"{BSZ}x{h}+{x+w}+{y}", [
-    ([None, -CRB, None, None], drag_both(drag_rgt, drag_bot), "size_nw_se"),
-    ([None, None, None,  CRB], drag_both(drag_rgt, drag_top), "size_ne_sw"),
-    ([None, None, None, None], drag_rgt, "size_we")
+    ([None, -CRB, None, None], drag_both(drag_rgt, drag_bot), CUR_SIZE_SE),
+    ([None, None, None,  CRB], drag_both(drag_rgt, drag_top), CUR_SIZE_NE),
+    ([None, None, None, None], drag_rgt, CUR_SIZE_E)
 ])
 
 rect_windows = [
@@ -486,11 +525,20 @@ def update_windows():
     for win, fmt in windows:
         win.update()
 
+    if not IS_WIN:
+        winBtn.attributes('-alpha', '0.9')
+        for win, fmt in rect_windows:
+            win.wm_attributes('-alpha', '0.6')
+
 def liftall():
     for win, fmt, in windows:
         win.lift()
 
 liftall()
+
+if not IS_WIN:
+    winBtn.wait_visibility()
+    update_windows()
 
 winBtn.mainloop()
 

@@ -8,7 +8,17 @@ import tkinter as tk
 from tkinter import ttk
 import string
 
-from PIL import Image, ImageGrab, ImageTk
+from PIL import Image, ImageTk
+
+
+#try:
+#from PIL import ImageGrab
+#grab_screenshot = ImageGrab.grab
+
+from scr_win import grab_screenshot
+
+
+
 #ImageGrab.grab([rect]).show()
 import os
 
@@ -36,8 +46,9 @@ btn_w = w+2*BTN_W
 
 BORDER_COLOR = "#ffff00"
 IDLE_COLOR = "#000060"
-REC_COLOR = "#a00000"
+REC_COLORS = ["#a00000", "#ff2010"]
 
+rec_color = 0
 
 if os.name == 'nt':
     # stackoverflow.com/21319486
@@ -293,7 +304,7 @@ def load_icon(name):
 set_highlight_color(IDLE_COLOR)
 
 def do_prt():
-    img = ImageGrab.grab([x, y, x+w, y+h])
+    img = grab_screenshot([x, y, x+w, y+h])
 
     clipboard_set_image(img)
 
@@ -316,16 +327,23 @@ def calc_pix_loss(a, b):
     return dr*dr + dg*dg + db*db
 
 def do_record_frame():
-    global rec_img
+    if not recording: return
+    global rec_img, rec_color
     #print("record frame")
+    
+
+    rec_color ^= 1
+    color = REC_COLORS[rec_color]
+    set_highlight_color(color)
 
     iw, ih = rec_img.size if rec_img else (w, 0)
 
-    curframe = ImageGrab.grab([x, y, x+w, y+h]).convert('RGB')
+    curframe = grab_screenshot([x, y, x+w, y+h]).convert('RGB')
 
     SW = 1#8
     xx = 0
     MAX_DY = h//2
+    MAX_LOSS = 1
 
     # find out stitching position
     if rec_img:
@@ -340,15 +358,22 @@ def do_record_frame():
         for iy in range(ih-h-MAX_DY, ih-h+MAX_DY):
             cur_loss = 0
             dy = min(ih-iy, h)
+            dy = max(dy, 1)
+            
+            max_loss = MAX_LOSS*dy
             for yy in range(0+10, dy-10):
                 #for xx in range(SW):
                 cur_loss += calc_pix_loss(r_dat[xx, iy+yy], c_dat[xx, yy])
+                if cur_loss > max_loss: break
                 
-            cur_loss /= dy
-            if cur_loss < low_loss:
-                low_pos  = iy
-                low_loss = cur_loss
-    
+            else:
+                cur_loss /= dy
+                if cur_loss < low_loss:
+                    low_pos  = iy
+                    low_loss = cur_loss
+
+        print(f"{low_loss=} {low_pos=} dy={ih-low_pos-h}")
+        
         paste_y = low_pos
     else:
         paste_y = 0
@@ -370,7 +395,8 @@ def do_record_frame():
 def do_toggle_rec():
     global recording, rec_img
     recording = not recording
-    color = REC_COLOR if recording else IDLE_COLOR
+    rec_color = 0
+    color = REC_COLORS[0] if recording else IDLE_COLOR
     set_highlight_color(color)
 
     if not recording:
